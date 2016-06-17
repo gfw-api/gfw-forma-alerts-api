@@ -11,7 +11,7 @@ schemes:
 
 produces:
   - application/vnd.api+json
-  
+
 # will be prefixed to all paths
 basePath: /api/v1
 
@@ -294,7 +294,7 @@ definitions:
     properties:
       data:
         properties:
-          $schema:
+          schema:
             $ref: '#/definitions/FORMALATESTBody'
   FORMALATESTBody:
     type: object
@@ -322,7 +322,7 @@ definitions:
     properties:
       data:
         properties:
-          $schema:
+          schema:
             $ref: '#/definitions/FORMAALERTSBody'
 
   FORMAALERTSBody:
