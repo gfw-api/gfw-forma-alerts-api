@@ -7,8 +7,7 @@ var Mustache = require('mustache');
 var NotFound = require('errors/notFound');
 var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
-const WORLD = `SELECT COUNT(f.*) AS value
-            {{additionalSelect}}
+const WORLD = `SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
         FROM forma_api f
         WHERE f.date >= '{{begin}}'::date
               AND f.date <= '{{end}}'::date
@@ -16,15 +15,22 @@ const WORLD = `SELECT COUNT(f.*) AS value
                 ST_SetSRID(
                   ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom) `;
 
-const ISO = `SELECT COUNT(f.*) AS value
-            {{additionalSelect}}
+const ISO = `
+        with r as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
         FROM forma_api f
-        WHERE f.date >= '{{begin}}'::date
-              AND f.date <= '{{end}}'::date
-              AND f.iso = UPPER('{{iso}}')`;
+        WHERE f.iso = UPPER('{{iso}}') and f.date >= '{{begin}}'::date
+           AND f.date <= '{{end}}'::date),
+        area as (SELECT (ST_Area(geography(the_geom))/10000) as area_ha
+                   FROM gadm2_countries_simple
+                   WHERE iso = UPPER('{{iso}}'))
+        select value, area_ha, min_date, max_date
+        from r, area`;
 
-const ID1 = `SELECT COUNT(f.*) AS value
-            {{additionalSelect}}
+
+const ID1 = `with area as (SELECT (ST_Area(geography(the_geom))/10000) as area_ha
+           FROM gadm2_provinces_simple
+           WHERE iso = UPPER('{{iso}}') and id_1 = {{id1}}),
+        r as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
         FROM forma_api f
         INNER JOIN (
             SELECT *
@@ -32,27 +38,30 @@ const ID1 = `SELECT COUNT(f.*) AS value
             WHERE id_1 = {{id1}}
                   AND iso = UPPER('{{iso}}')) g
             ON f.gadm2::int = g.objectid
-        WHERE f.date >= '{{begin}}'::date
-              AND f.date <= '{{end}}'::date`;
+            WHERE f.date >= '{{begin}}'::date
+              AND f.date <= '{{end}}'::date)
+        select value, area_ha, min_date, max_date from r, area`;
 
-const USE = `SELECT COUNT(f.*) AS value
-            {{additionalSelect}}
-        FROM {{useTable}} u, forma_api f
-        WHERE u.cartodb_id = {{pid}}
-              AND ST_Intersects(f.the_geom, u.the_geom)
-              AND f.date >= '{{begin}}'::date
-              AND f.date <= '{{end}}'::date `;
+const USE = `SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, area_ha::numeric
+            FROM {{useTable}} u
+            left join forma_api f
+                    on ST_Intersects(f.the_geom, u.the_geom)
+            where u.cartodb_id = {{pid}}
+            AND f.date >= '{{begin}}'::date
+            AND f.date <= '{{end}}'::date
+            group by area_ha`;
 
 const WDPA = `WITH p as (SELECT CASE when marine::numeric = 2 then
-      null  when ST_NPoints(the_geom)<=18000 THEN the_geom
-       WHEN ST_NPoints(the_geom) BETWEEN 18000 AND 50000 THEN ST_RemoveRepeatedPoints(the_geom, 0.001)
-      ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom FROM wdpa_protected_areas where wdpaid={{wdpaid}})
-        SELECT COUNT(f.*) AS value
-            {{additionalSelect}}
-        FROM forma_api f, p
-        WHERE ST_Intersects(f.the_geom, p.the_geom)
-              AND f.date >= '{{begin}}'::date
-              AND f.date <= '{{end}}'::date `;
+                      null  when ST_NPoints(the_geom)<=18000 THEN the_geom
+                       WHEN ST_NPoints(the_geom) BETWEEN 18000 AND 50000 THEN ST_RemoveRepeatedPoints(the_geom, 0.001)
+                      ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom, gis_area*100 as area_ha  FROM wdpa_protected_areas where wdpaid={{wdpaid}})
+
+                SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, area_ha::numeric
+                        FROM forma_api f right join p on
+                     ST_Intersects(f.the_geom, p.the_geom)
+                     AND f.date >= '{{begin}}'::date
+                     AND f.date <= '{{end}}'::date
+                        group by area_ha `;
 
 const LATEST = `SELECT DISTINCT date
         FROM forma_api
@@ -60,7 +69,6 @@ const LATEST = `SELECT DISTINCT date
         ORDER BY date DESC
         LIMIT {{limit}}`;
 
-const MIN_MAX_DATE_SQL = ', MIN(date) as min_date, MAX(date) as max_date ';
 
 var executeThunk = function(client, sql, params) {
     return function(callback) {
@@ -75,7 +83,7 @@ var executeThunk = function(client, sql, params) {
 
 var deserializer = function(obj) {
     return function(callback) {
-        new JSONAPIDeserializer().deserialize(obj, callback);
+        new JSONAPIDeserializer({keyForAttribute: 'camelCase'}).deserialize(obj, callback);
     };
 };
 
@@ -111,8 +119,10 @@ class CartoDBService {
             let formats = ['csv', 'geojson', 'kml', 'shp', 'svg'];
             let download = {};
             let queryFinal = Mustache.render(query, params);
-            queryFinal = queryFinal.replace(MIN_MAX_DATE_SQL, '');
-            queryFinal = queryFinal.replace('SELECT COUNT(f.*) AS value', ' SELECT f.*');
+            queryFinal = queryFinal.replace('select value, area_ha, min_date, max_date', 'select r.*, area.*');
+            queryFinal = queryFinal.replace('SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, area_ha::numeric', ' SELECT f.*');
+            queryFinal = queryFinal.replace('SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date', ' SELECT f.*');
+            queryFinal = queryFinal.replace('group by area_ha', '');
             queryFinal = encodeURIComponent(queryFinal);
             for(let i=0, length = formats.length; i < length; i++){
                 download[formats[i]] = this.apiUrl + '?q=' + queryFinal + '&format=' + formats[i];
@@ -125,7 +135,7 @@ class CartoDBService {
     }
 
 
-    * getNational(iso, alertQuery, period = defaultDate()) {
+    * getNational(iso, period = defaultDate()) {
         logger.debug('Obtaining national of iso %s', iso);
         let periods = period.split(',');
         let params = {
@@ -133,11 +143,9 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-        if(alertQuery){
-            params.additionalSelect = MIN_MAX_DATE_SQL;
-        }
 
         let data = yield executeThunk(this.client, ISO, params);
+        logger.debug(data);
         if (data.rows && data.rows.length > 0) {
             let result = data.rows[0];
 
@@ -147,7 +155,7 @@ class CartoDBService {
         return null;
     }
 
-    * getSubnational(iso, id1, alertQuery, period = defaultDate()) {
+    * getSubnational(iso, id1, period = defaultDate()) {
         logger.debug('Obtaining subnational of iso %s and id1', iso, id1);
         let periods = period.split(',');
         let params = {
@@ -156,9 +164,6 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-        if(alertQuery){
-            params.additionalSelect = MIN_MAX_DATE_SQL;
-        }
 
         let data = yield executeThunk(this.client, ID1, params);
         if (data.rows && data.rows.length > 0) {
@@ -170,7 +175,7 @@ class CartoDBService {
         return null;
     }
 
-    * getUse(useTable, id, alertQuery, period = defaultDate()) {
+    * getUse(useTable, id, period = defaultDate()) {
         logger.debug('Obtaining use with id %s', id);
         let periods = period.split(',');
         let params = {
@@ -179,9 +184,6 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-        if(alertQuery){
-            params.additionalSelect = MIN_MAX_DATE_SQL;
-        }
 
         let data = yield executeThunk(this.client, USE, params);
 
@@ -193,7 +195,7 @@ class CartoDBService {
         return null;
     }
 
-    * getWdpa(wdpaid, alertQuery, period = defaultDate()) {
+    * getWdpa(wdpaid, period = defaultDate()) {
         logger.debug('Obtaining wpda of id %s', wdpaid);
         let periods = period.split(',');
         let params = {
@@ -201,9 +203,6 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-        if(alertQuery){
-            params.additionalSelect = MIN_MAX_DATE_SQL;
-        }
 
         let data = yield executeThunk(this.client, WDPA, params);
         if (data.rows && data.rows.length > 0) {
@@ -229,7 +228,7 @@ class CartoDBService {
         return yield deserializer(result.body);
     }
 
-    * getWorld(hashGeoStore, alertQuery, period = defaultDate()) {
+    * getWorld(hashGeoStore, period = defaultDate()) {
         logger.debug('Obtaining world with hashGeoStore %s', hashGeoStore);
 
         let geostore = yield this.getGeostore(hashGeoStore);
@@ -241,14 +240,11 @@ class CartoDBService {
                 begin: periods[0],
                 end: periods[1]
             };
-            if(alertQuery){
-                params.additionalSelect = MIN_MAX_DATE_SQL;
-            }
 
             let data = yield executeThunk(this.client, WORLD, params);
             if (data.rows && data.rows.length > 0) {
                 let result = data.rows[0];
-
+                result.area_ha = geostore.areaHa;
                 result.downloadUrls = this.getDownloadUrls(WORLD, params);
                 return result;
             }
