@@ -9,7 +9,8 @@ var formaAlertsSerializer = new JSONAPISerializer('forma-alerts', {
     },
     downloadUrls: {
         attributes: ['csv', 'geojson', 'kml', 'shp', 'svg']
-    }
+    },
+    keyForAttribute: 'camelCase'
 });
 
 var formaLatestSerializer = new JSONAPISerializer('imazon-latest', {
