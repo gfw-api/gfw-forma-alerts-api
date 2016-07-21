@@ -3,13 +3,14 @@
 var logger = require('logger');
 var JSONAPISerializer = require('jsonapi-serializer').Serializer;
 var formaAlertsSerializer = new JSONAPISerializer('forma-alerts', {
-    attributes: ['value', 'min_date', 'max_date', 'downloadUrls'],
+    attributes: ['value', 'min_date', 'max_date', 'downloadUrls', 'area_ha'],
     typeForAttribute: function(attribute, record) {
         return attribute;
     },
     downloadUrls: {
         attributes: ['csv', 'geojson', 'kml', 'shp', 'svg']
-    }
+    },
+    keyForAttribute: 'camelCase'
 });
 
 var formaLatestSerializer = new JSONAPISerializer('imazon-latest', {
