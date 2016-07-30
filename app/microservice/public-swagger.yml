@@ -13,7 +13,7 @@ produces:
   - application/vnd.api+json
 
 paths:
-  /glad-alerts:
+  /forma-alerts:
     get:
       operationId: world
       produces:
@@ -50,7 +50,7 @@ paths:
           schema:
             $ref: '#/definitions/Errors'
 
-  /glad-alerts/use/{name}/{id}:
+  /forma-alerts/use/{name}/{id}:
     get:
       operationId: use
       produces:
@@ -91,7 +91,7 @@ paths:
           schema:
             $ref: '#/definitions/Errors'
 
-  /glad-alerts/wdpa/{id}:
+  /forma-alerts/wdpa/{id}:
     get:
       operationId: wdpa
       produces:
@@ -128,7 +128,7 @@ paths:
           schema:
             $ref: '#/definitions/Errors'
 
-  /glad-alerts/admin/{iso}:
+  /forma-alerts/admin/{iso}:
     get:
       operationId: getNational
       produces:
@@ -165,7 +165,7 @@ paths:
           schema:
             $ref: '#/definitions/Errors'
 
-  /glad-alerts/admin/{iso}/{id1}:
+  /forma-alerts/admin/{iso}/{id1}:
     get:
       operationId: getSubnational
       produces:
@@ -206,7 +206,7 @@ paths:
           description: unexpected error
           schema:
             $ref: '#/definitions/Errors'
-  /glad-alerts/latest:
+  /forma-alerts/latest:
     get:
       operationId: getLatest
       produces:
