@@ -1,7 +1,7 @@
 swagger: '2.0'
 info:
   title: GFW Forma Alerts API
-   description: |
+  description: |
     ## Global Forest Watch - Forma Alerts API
 
     Identifies areas of likely tree cover loss
