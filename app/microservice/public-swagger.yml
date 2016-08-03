@@ -1,7 +1,19 @@
 swagger: '2.0'
 info:
   title: GFW Forma Alerts API
-  description: Global Forest Watch - Forma Alerts API
+   description: |
+    ## Global Forest Watch - Forma Alerts API
+
+    Identifies areas of likely tree cover loss
+
+    | Property | Value |
+    | --- | --- | --- |
+    | Coverage | Humid tropical forest biome |
+    | Resolution |500 x 500 meters (MODIS) |
+    | Source | WRI/CGD |
+    | Timescale | January 2006–August 2015 |
+    | Units | Alerts |
+    | Updates | N/A |
   version: "1.0.0"
 host: example.vizzuality.com
 
@@ -206,7 +218,7 @@ paths:
           description: unexpected error
           schema:
             $ref: '#/definitions/Errors'
-  /forma-alerts/latest:
+  /formaco d-alerts/latest:
     get:
       operationId: getLatest
       produces:
