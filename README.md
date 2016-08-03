@@ -4,7 +4,7 @@
 This repository is the microservice that it implement the forma alerts funcionality and exposed the /forma-alerts endpoints in the api-gateway
 
 [View the documentation for this
-API](http://gfw-api.github.io/swagger-ui/?url=https://raw.githubusercontent.com/gfw-api/gfw-forma-alerts-api/master/app/microservice/swagger.yml#/QUICC)
+API](http://gfw-api.github.io/swagger-ui/?url=https://raw.githubusercontent.com/gfw-api/gfw-forma-alerts-api/master/app/microservice/swagger.yml#/FORMA)
 
 ## First time user
 Perform the following steps:
