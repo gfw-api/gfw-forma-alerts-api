@@ -3,42 +3,42 @@
     "name": "#(service.name)",
     "tags": ["gfw"],
     "urls": [{
-        "url": "/forma-alerts/admin/:iso",
+        "url": "/v1/forma-alerts/admin/:iso",
         "method": "GET",
         "endpoints": [{
             "method": "GET",
             "path": "/api/v1/forma-alerts/admin/:iso"
         }]
     }, {
-        "url": "/forma-alerts/admin/:iso/:id1",
+        "url": "/v1/forma-alerts/admin/:iso/:id1",
         "method": "GET",
         "endpoints": [{
             "method": "GET",
             "path": "/api/v1/forma-alerts/admin/:iso/:id1"
         }]
     }, {
-        "url": "/forma-alerts/use/:name/:id",
+        "url": "/v1/forma-alerts/use/:name/:id",
         "method": "GET",
         "endpoints": [{
             "method": "GET",
             "path": "/api/v1/forma-alerts/use/:name/:id"
         }]
     }, {
-        "url": "/forma-alerts/wdpa/:id",
+        "url": "/v1/forma-alerts/wdpa/:id",
         "method": "GET",
         "endpoints": [{
             "method": "GET",
             "path": "/api/v1/forma-alerts/wdpa/:id"
         }]
     }, {
-        "url": "/forma-alerts",
+        "url": "/v1/forma-alerts",
         "method": "GET",
         "endpoints": [{
             "method": "GET",
             "path": "/api/v1/forma-alerts"
         }]
     }, {
-        "url": "/forma-alerts/latest",
+        "url": "/v1/forma-alerts/latest",
         "method": "GET",
         "endpoints": [{
             "method": "GET",
