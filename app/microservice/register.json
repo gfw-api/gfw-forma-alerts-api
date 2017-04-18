@@ -38,6 +38,13 @@
             "path": "/api/v1/forma-alerts"
         }]
     }, {
+        "url": "/v1/forma-alerts",
+        "method": "POST",
+        "endpoints": [{
+            "method": "POST",
+            "path": "/api/v1/forma-alerts"
+        }]
+    }, {
         "url": "/v1/forma-alerts/latest",
         "method": "GET",
         "endpoints": [{
