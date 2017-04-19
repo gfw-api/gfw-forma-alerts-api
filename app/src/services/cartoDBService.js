@@ -7,13 +7,17 @@ var Mustache = require('mustache');
 var NotFound = require('errors/notFound');
 var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
-const WORLD = `SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/10000 as area_ha 
+const WORLD = `
+         with p as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha ),
+        c as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
         FROM forma_api f
         WHERE f.date >= '{{begin}}'::date
               AND f.date <= '{{end}}'::date
               AND ST_INTERSECTS(
                 ST_SetSRID(
-                  ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom) group by area_ha`;
+                  ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom))
+         SELECT  c.value, c.min_date, c.max_date, p.area_ha
+        FROM c, p`;
 
 const ISO = `
         with r as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
