@@ -7,13 +7,17 @@ var Mustache = require('mustache');
 var NotFound = require('errors/notFound');
 var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
-const WORLD = `SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
+const WORLD = `
+         with p as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha ),
+        c as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
         FROM forma_api f
         WHERE f.date >= '{{begin}}'::date
               AND f.date <= '{{end}}'::date
               AND ST_INTERSECTS(
                 ST_SetSRID(
-                  ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom) `;
+                  ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom))
+         SELECT  c.value, c.min_date, c.max_date, p.area_ha
+        FROM c, p`;
 
 const ISO = `
         with r as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
@@ -233,24 +237,29 @@ class CartoDBService {
 
         let geostore = yield this.getGeostore(hashGeoStore);
         if (geostore && geostore.geojson) {
-            logger.debug('Executing query in cartodb with geostore', geostore);
-            let periods = period.split(',');
-            let params = {
-                geojson: JSON.stringify(geostore.geojson.features[0].geometry),
-                begin: periods[0],
-                end: periods[1]
-            };
-
-            let data = yield executeThunk(this.client, WORLD, params);
-            if (data.rows && data.rows.length > 0) {
-                let result = data.rows[0];
-                result.area_ha = geostore.areaHa;
-                result.downloadUrls = this.getDownloadUrls(WORLD, params);
-                return result;
-            }
-            return null;
+            return yield this.getWorldWithGeojson(geostore.geojson, period);
         }
         throw new NotFound('Geostore not found');
+    }
+
+    * getWorldWithGeojson(geojson, period = defaultDate()) {
+        logger.debug('Executing query in cartodb with geojson', geojson);
+        let periods = period.split(',');
+        let params = {
+            geojson: JSON.stringify(geojson.features[0].geometry),
+            begin: periods[0],
+            end: periods[1]
+        };
+        let data = yield executeThunk(this.client, WORLD, params);
+        if (data.rows) {
+            let result = data.rows[0];
+            if(data.rows.length > 0){
+                result.area_ha = data.rows[0].area_ha;
+            }
+            result.downloadUrls = this.getDownloadUrls(WORLD, params);
+            return result;
+        }
+        return null;
     }
 
     * latest(limit=3) {
