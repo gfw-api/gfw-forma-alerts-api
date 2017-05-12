@@ -8,10 +8,11 @@ var NotFound = require('errors/notFound');
 var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
 const WORLD = `
-         with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha ),
+         with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha )
         select area.area_ha, COUNT(f.activity) AS alerts
         from area left join forma_activity f on 
-        ST_Intersects(f.the_geom, area.the_geom)
+        ST_INTERSECTS(
+                ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
         group by area.area_ha`;
