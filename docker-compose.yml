@@ -8,6 +8,7 @@ prod:
   dns: ${DNS_SERVER}
   log_driver: "gelf"
   restart: always
+  log_driver: "syslog"
   log_opt:
     syslog-address: ${SYSLOG_ADDRESS}
     tag: gfw-forma${STAGING}
