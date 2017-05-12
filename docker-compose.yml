@@ -1,5 +1,5 @@
 prod:
-  image: vizzuality/gfw-forma-alerts-api:1.1.0${STAGING}
+  image: vizzuality/gfw-forma-alerts-api:2.0.0${STAGING}
   ports:
     - "3600"
   env_file:

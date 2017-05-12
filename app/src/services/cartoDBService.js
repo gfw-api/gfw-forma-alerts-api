@@ -8,71 +8,55 @@ var NotFound = require('errors/notFound');
 var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
 const WORLD = `
-         with p as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha ),
-        c as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
-        FROM forma_api f
-        WHERE f.date >= '{{begin}}'::date
-              AND f.date <= '{{end}}'::date
-              AND ST_INTERSECTS(
-                ST_SetSRID(
-                  ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom))
-         SELECT  c.value, c.min_date, c.max_date, p.area_ha
-        FROM c, p`;
+         with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha ),
+        select area.area_ha, COUNT(f.activity) AS alerts
+        from area left join forma_activity f on 
+        ST_Intersects(f.the_geom, area.the_geom)
+        and f.acq_date >= '{{begin}}'::date
+        AND f.acq_date <= '{{end}}'::date
+        group by area.area_ha`;
 
 const ISO = `
-        with r as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
-        FROM forma_api f
-        WHERE f.iso = UPPER('{{iso}}') and f.date >= '{{begin}}'::date
-           AND f.date <= '{{end}}'::date),
-        area as (SELECT (ST_Area(geography(the_geom))/10000) as area_ha
-                   FROM gadm2_countries_simple
-                   WHERE iso = UPPER('{{iso}}'))
-        select value, area_ha, min_date, max_date
-        from r, area`;
+        with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_countries where iso = UPPER('{{iso}}'))
+        select area.area_ha, COUNT(f.activity) AS alerts
+        from area left join forma_activity f on 
+        ST_Intersects(f.the_geom, area.the_geom)
+        and f.acq_date >= '{{begin}}'::date
+        AND f.acq_date <= '{{end}}'::date
+        group by area.area_ha
+`;
 
 
-const ID1 = `with area as (SELECT (ST_Area(geography(the_geom))/10000) as area_ha
-           FROM gadm2_provinces_simple
-           WHERE iso = UPPER('{{iso}}') and id_1 = {{id1}}),
-        r as (SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date
-        FROM forma_api f
-        INNER JOIN (
-            SELECT *
-            FROM gadm2
-            WHERE id_1 = {{id1}}
-                  AND iso = UPPER('{{iso}}')) g
-            ON f.gadm2::int = g.objectid
-            WHERE f.date >= '{{begin}}'::date
-              AND f.date <= '{{end}}'::date)
-        select value, area_ha, min_date, max_date from r, area`;
+const ID1 = `
+        with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_adm1 where iso = UPPER('{{iso}}') and id_1 = {{id1}})
+        select area.area_ha, COUNT(f.activity) AS alerts
+        from area left join forma_activity f on 
+        ST_Intersects(f.the_geom, area.the_geom)
+        and f.acq_date >= '{{begin}}'::date
+        AND f.acq_date <= '{{end}}'::date
+        group by area.area_ha`;
 
-const USE = `SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, area_ha::numeric
-            FROM {{useTable}} u
-            left join forma_api f
-                    on ST_Intersects(f.the_geom, u.the_geom)
-            where u.cartodb_id = {{pid}}
-            AND f.date >= '{{begin}}'::date
-            AND f.date <= '{{end}}'::date
-            group by area_ha`;
+const USE = `
+        with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from {{useTable}} where cartodb_id = {{pid}})
+        select area.area_ha, COUNT(f.activity) AS alerts
+        from area left join forma_activity f on 
+        ST_Intersects(f.the_geom, area.the_geom)
+        and f.acq_date >= '{{begin}}'::date
+        AND f.acq_date <= '{{end}}'::date
+        group by area.area_ha
+`;
 
-const WDPA = `WITH p as (SELECT CASE when marine::numeric = 2 then
+const WDPA = `WITH area as (SELECT CASE when marine::numeric = 2 then
                       null  when ST_NPoints(the_geom)<=18000 THEN the_geom
                        WHEN ST_NPoints(the_geom) BETWEEN 18000 AND 50000 THEN ST_RemoveRepeatedPoints(the_geom, 0.001)
                       ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom, gis_area*100 as area_ha  FROM wdpa_protected_areas where wdpaid={{wdpaid}})
 
-                SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, area_ha::numeric
-                        FROM forma_api f right join p on
-                     ST_Intersects(f.the_geom, p.the_geom)
-                     AND f.date >= '{{begin}}'::date
-                     AND f.date <= '{{end}}'::date
-                        group by area_ha `;
-
-const LATEST = `SELECT DISTINCT date
-        FROM forma_api
-        WHERE date IS NOT NULL
-        ORDER BY date DESC
-        LIMIT {{limit}}`;
-
+                select area.area_ha, COUNT(f.activity) AS alerts
+        from area left join forma_activity f on 
+        ST_Intersects(f.the_geom, area.the_geom)
+        and f.acq_date >= '{{begin}}'::date
+        AND f.acq_date <= '{{end}}'::date
+        group by area.area_ha `;
 
 var executeThunk = function(client, sql, params) {
     return function(callback) {
@@ -124,8 +108,9 @@ class CartoDBService {
             let download = {};
             let queryFinal = Mustache.render(query, params);
             queryFinal = queryFinal.replace('select value, area_ha, min_date, max_date', 'select r.*, area.*');
-            queryFinal = queryFinal.replace('SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date, area_ha::numeric', ' SELECT f.*');
-            queryFinal = queryFinal.replace('SELECT COUNT(f.*) AS value, MIN(f.date) as min_date, MAX(f.date) as max_date', ' SELECT f.*');
+            queryFinal = queryFinal.replace('SELECT COUNT(f.alerts) AS alerts,  area_ha::numeric', ' SELECT f.*');
+            queryFinal = queryFinal.replace('SELECT COUNT(f.alerts) AS alerts', ' SELECT f.*');
+            queryFinal = queryFinal.replace('select area.area_ha, COUNT(f.activity) AS alerts', ' select area.area_ha, f.*');
             queryFinal = queryFinal.replace('group by area_ha', '');
             queryFinal = encodeURIComponent(queryFinal);
             for(let i=0, length = formats.length; i < length; i++){
@@ -262,19 +247,19 @@ class CartoDBService {
         return null;
     }
 
-    * latest(limit=3) {
-        logger.debug('Obtaining latest with limit %s', limit);
-        let params = {
-            limit: limit
-        };
-        let data = yield executeThunk(this.client, LATEST, params);
-        logger.debug('data', data);
-        if (data.rows ) {
-            let result = data.rows;
-            return result;
-        }
-        return null;
-    }
+    // * latest(limit=3) {
+    //     logger.debug('Obtaining latest with limit %s', limit);
+    //     let params = {
+    //         limit: limit
+    //     };
+    //     let data = yield executeThunk(this.client, LATEST, params);
+    //     logger.debug('data', data);
+    //     if (data.rows ) {
+    //         let result = data.rows;
+    //         return result;
+    //     }
+    //     return null;
+    // }
 
 }
 
