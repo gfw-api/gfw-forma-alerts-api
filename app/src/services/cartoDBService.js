@@ -9,7 +9,7 @@ var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
 const WORLD = `
          with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha )
-        select area.area_ha, COUNT(f.activity) AS alerts
+        select area.area_ha, COUNT(f.activity) AS value
         from area left join forma_activity f on 
         ST_INTERSECTS(
                 ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom)
@@ -19,7 +19,7 @@ const WORLD = `
 
 const ISO = `
         with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_countries where iso = UPPER('{{iso}}'))
-        select area.area_ha, COUNT(f.activity) AS alerts
+        select area.area_ha, COUNT(f.activity) AS value
         from area left join forma_activity f on 
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
@@ -30,7 +30,7 @@ const ISO = `
 
 const ID1 = `
         with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_adm1 where iso = UPPER('{{iso}}') and id_1 = {{id1}})
-        select area.area_ha, COUNT(f.activity) AS alerts
+        select area.area_ha, COUNT(f.activity) AS value
         from area left join forma_activity f on 
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
@@ -39,7 +39,7 @@ const ID1 = `
 
 const USE = `
         with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from {{useTable}} where cartodb_id = {{pid}})
-        select area.area_ha, COUNT(f.activity) AS alerts
+        select area.area_ha, COUNT(f.activity) AS value
         from area left join forma_activity f on 
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
@@ -52,7 +52,7 @@ const WDPA = `WITH area as (SELECT CASE when marine::numeric = 2 then
                        WHEN ST_NPoints(the_geom) BETWEEN 18000 AND 50000 THEN ST_RemoveRepeatedPoints(the_geom, 0.001)
                       ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom, gis_area*100 as area_ha  FROM wdpa_protected_areas where wdpaid={{wdpaid}})
 
-                select area.area_ha, COUNT(f.activity) AS alerts
+                select area.area_ha, COUNT(f.activity) AS value
         from area left join forma_activity f on 
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date

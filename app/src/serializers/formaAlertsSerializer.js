@@ -3,7 +3,7 @@
 var logger = require('logger');
 var JSONAPISerializer = require('jsonapi-serializer').Serializer;
 var formaAlertsSerializer = new JSONAPISerializer('forma-alerts', {
-    attributes: ['alerts', 'downloadUrls', 'area_ha'],
+    attributes: ['value', 'downloadUrls', 'area_ha'],
     typeForAttribute: function(attribute, record) {
         return attribute;
     },
