@@ -10,7 +10,7 @@ var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 const WORLD = `
          with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha )
         select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on 
+        from area left join forma_activity f on
         ST_INTERSECTS(
                 ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom)
         and f.acq_date >= '{{begin}}'::date
@@ -20,7 +20,7 @@ const WORLD = `
 const ISO = `
         with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_countries where iso = UPPER('{{iso}}'))
         select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on 
+        from area left join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
@@ -31,7 +31,7 @@ const ISO = `
 const ID1 = `
         with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_adm1 where iso = UPPER('{{iso}}') and id_1 = {{id1}})
         select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on 
+        from area left join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
@@ -40,7 +40,7 @@ const ID1 = `
 const USE = `
         with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from {{useTable}} where cartodb_id = {{pid}})
         select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on 
+        from area left join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
@@ -53,7 +53,7 @@ const WDPA = `WITH area as (SELECT CASE when marine::numeric = 2 then
                       ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom, gis_area*100 as area_ha  FROM wdpa_protected_areas where wdpaid={{wdpaid}})
 
                 select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on 
+        from area left join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
@@ -223,12 +223,12 @@ class CartoDBService {
 
         let geostore = yield this.getGeostore(hashGeoStore);
         if (geostore && geostore.geojson) {
-            return yield this.getWorldWithGeojson(geostore.geojson, period);
+            return yield this.getWorldWithGeojson(geostore.geojson, period, geostore.areaHa);
         }
         throw new NotFound('Geostore not found');
     }
 
-    * getWorldWithGeojson(geojson, period = defaultDate()) {
+    * getWorldWithGeojson(geojson, period = defaultDate(), areaHa=null) {
         logger.debug('Executing query in cartodb with geojson', geojson);
         let periods = period.split(',');
         let params = {
@@ -240,7 +240,11 @@ class CartoDBService {
         if (data.rows) {
             let result = data.rows[0];
             if(data.rows.length > 0){
-                result.area_ha = data.rows[0].area_ha;
+                if (areaHa) {
+                    result.area_ha = areaHa;
+                } else {
+                    result.area_ha = data.rows[0].area_ha;
+                }
             }
             result.downloadUrls = this.getDownloadUrls(WORLD, params);
             return result;
