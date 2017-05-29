@@ -1,13 +1,14 @@
 'use strict';
-var logger = require('logger');
-var path = require('path');
-var config = require('config');
-var CartoDB = require('cartodb');
-var Mustache = require('mustache');
-var NotFound = require('errors/notFound');
-var JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
+const logger = require('logger');
+const path = require('path');
+const config = require('config');
+const CartoDB = require('cartodb');
+const Mustache = require('mustache');
+const NotFound = require('errors/notFound');
+const GeostoreService = require('services/geostoreService');
+const JSONAPIDeserializer = require('jsonapi-serializer').Deserializer;
 
-const WORLD = `
+const WORLD_WITH_AREA = `
          with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), TRUE)/1000 as area_ha )
         select area.area_ha, COUNT(f.activity) AS value
         from area left join forma_activity f on
@@ -16,48 +17,53 @@ const WORLD = `
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
         group by area.area_ha`;
+const WORLD = `
+         
+        select COUNT(f.activity) AS value
+        from forma_activity f where
+        ST_INTERSECTS(
+                ST_SetSRID(ST_GeomFromGeoJSON('{{{geojson}}}'), 4326), f.the_geom)
+        and f.acq_date >= '{{begin}}'::date
+        AND f.acq_date <= '{{end}}'::date
+        `;
 
 const ISO = `
-        with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_countries where iso = UPPER('{{iso}}'))
-        select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on
+        with area as (select the_geom from gadm28_countries where iso = UPPER('{{iso}}'))
+        select COUNT(f.activity) AS value
+        from area inner join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
-        group by area.area_ha
 `;
 
 
 const ID1 = `
-        with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from gadm28_adm1 where iso = UPPER('{{iso}}') and id_1 = {{id1}})
-        select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on
+        with area as (select the_geom from gadm28_adm1 where iso = UPPER('{{iso}}') and id_1 = {{id1}})
+        select COUNT(f.activity) AS value
+        from area inner join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
-        AND f.acq_date <= '{{end}}'::date
-        group by area.area_ha`;
+        AND f.acq_date <= '{{end}}'::date`;
 
 const USE = `
-        with area as (select (ST_Area(geography(the_geom))/10000) as area_ha, the_geom from {{useTable}} where cartodb_id = {{pid}})
-        select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on
+        with area as (select the_geom from {{useTable}} where cartodb_id = {{pid}})
+        select COUNT(f.activity) AS value
+        from area inner join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
         AND f.acq_date <= '{{end}}'::date
-        group by area.area_ha
 `;
 
 const WDPA = `WITH area as (SELECT CASE when marine::numeric = 2 then
                       null  when ST_NPoints(the_geom)<=18000 THEN the_geom
                        WHEN ST_NPoints(the_geom) BETWEEN 18000 AND 50000 THEN ST_RemoveRepeatedPoints(the_geom, 0.001)
-                      ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom, gis_area*100 as area_ha  FROM wdpa_protected_areas where wdpaid={{wdpaid}})
+                      ELSE ST_RemoveRepeatedPoints(the_geom, 0.005) END as the_geom  FROM wdpa_protected_areas where wdpaid={{wdpaid}})
 
-                select area.area_ha, COUNT(f.activity) AS value
-        from area left join forma_activity f on
+                select COUNT(f.activity) AS value
+        from area inner join forma_activity f on
         ST_Intersects(f.the_geom, area.the_geom)
         and f.acq_date >= '{{begin}}'::date
-        AND f.acq_date <= '{{end}}'::date
-        group by area.area_ha `;
+        AND f.acq_date <= '{{end}}'::date`;
 
 var executeThunk = function(client, sql, params) {
     return function(callback) {
@@ -70,11 +76,6 @@ var executeThunk = function(client, sql, params) {
     };
 };
 
-var deserializer = function(obj) {
-    return function(callback) {
-        new JSONAPIDeserializer({keyForAttribute: 'camelCase'}).deserialize(obj, callback);
-    };
-};
 
 
 let getToday = function() {
@@ -111,8 +112,8 @@ class CartoDBService {
             queryFinal = queryFinal.replace('select value, area_ha, min_date, max_date', 'select r.*, area.*');
             queryFinal = queryFinal.replace('SELECT COUNT(f.alerts) AS alerts,  area_ha::numeric', ' SELECT f.*');
             queryFinal = queryFinal.replace('SELECT COUNT(f.alerts) AS alerts', ' SELECT f.*');
-            queryFinal = queryFinal.replace('select area.area_ha, COUNT(f.activity) AS alerts', ' select area.area_ha, f.*');
-            queryFinal = queryFinal.replace('group by area_ha', '');
+            queryFinal = queryFinal.replace('select COUNT(f.activity) AS alerts', ' select f.*');
+            queryFinal = queryFinal.replace('select area.area_ha, COUNT(f.activity) AS value', ' select f.*');
             queryFinal = encodeURIComponent(queryFinal);
             for(let i=0, length = formats.length; i < length; i++){
                 download[formats[i]] = this.apiUrl + '?q=' + queryFinal + '&format=' + formats[i];
@@ -133,14 +134,19 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-
+        const geostore = yield GeostoreService.getGeostoreByIso(iso);
         let data = yield executeThunk(this.client, ISO, params);
-        logger.debug(data);
-        if (data.rows && data.rows.length > 0) {
-            let result = data.rows[0];
-
-            result.downloadUrls = this.getDownloadUrls(ISO, params);
-            return result;
+        if (geostore) {
+            if (data.rows && data.rows.length > 0) {
+                let result = data.rows[0];
+                result.area_ha = geostore.areaHa;
+                result.downloadUrls = this.getDownloadUrls(ISO, params);
+                return result;
+            } else {
+                return {
+                    area_ha: geostore.areaHa   
+                };
+            }
         }
         return null;
     }
@@ -154,18 +160,24 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-
+        let geostore = yield GeostoreService.getGeostoreByIsoAndId(iso, id1);
         let data = yield executeThunk(this.client, ID1, params);
-        if (data.rows && data.rows.length > 0) {
-            let result = data.rows[0];
-
-            result.downloadUrls = this.getDownloadUrls(ID1, params);
-            return result;
+        if(geostore) {
+            if (data.rows && data.rows.length > 0) {
+                let result = data.rows[0];
+                result.area_ha = geostore.areaHa;
+                result.downloadUrls = this.getDownloadUrls(ID1, params);
+                return result;
+            } else {
+                return {
+                    area_ha: geostore.areaHa   
+                };
+            }
         }
         return null;
     }
 
-    * getUse(useTable, id, period = defaultDate()) {
+    * getUse(useName, useTable, id, period = defaultDate()) {
         logger.debug('Obtaining use with id %s', id);
         let periods = period.split(',');
         let params = {
@@ -174,13 +186,19 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-
+        const geostore = yield GeostoreService.getGeostoreByUse(useName, id);
         let data = yield executeThunk(this.client, USE, params);
-
-        if (data.rows && data.rows.length > 0) {
-            let result = data.rows[0];
-            result.downloadUrls = this.getDownloadUrls(USE, params);
-            return result;
+        if (geostore) {
+            if (data.rows && data.rows.length > 0) {
+                let result = data.rows[0];
+                result.area_ha = geostore.areaHa;
+                result.downloadUrls = this.getDownloadUrls(USE, params);
+                return result;
+            } else {
+                return {
+                    area_ha: geostore.areaHa   
+                };
+            }
         }
         return null;
     }
@@ -193,35 +211,27 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-
+        const geostore = yield GeostoreService.getGeostoreByWdpa(wdpaid);
         let data = yield executeThunk(this.client, WDPA, params);
-        if (data.rows && data.rows.length > 0) {
-            let result = data.rows[0];
-            result.downloadUrls = this.getDownloadUrls(WDPA, params);
-            return result;
+        if (geostore) {
+            if (data.rows && data.rows.length > 0) {
+                let result = data.rows[0];
+                result.area_ha = geostore.areaHa;
+                result.downloadUrls = this.getDownloadUrls(WDPA, params);
+                return result;
+            } else {
+                return {
+                    area_ha: geostore.areaHa   
+                };
+            }
         }
         return null;
-    }
-
-    * getGeostore(hashGeoStore) {
-        logger.debug('Obtaining geostore with hash %s', hashGeoStore);
-        let result = yield require('vizz.microservice-client').requestToMicroservice({
-            uri: '/geostore/' + hashGeoStore,
-            method: 'GET',
-            json: true
-        });
-        if (result.statusCode !== 200) {
-            console.error('Error obtaining geostore:');
-            console.error(result);
-            return null;
-        }
-        return yield deserializer(result.body);
     }
 
     * getWorld(hashGeoStore, period = defaultDate()) {
         logger.debug('Obtaining world with hashGeoStore %s', hashGeoStore);
 
-        let geostore = yield this.getGeostore(hashGeoStore);
+        const geostore = yield GeostoreService.getGeostoreByHash(hashGeoStore);
         if (geostore && geostore.geojson) {
             return yield this.getWorldWithGeojson(geostore.geojson, period, geostore.areaHa);
         }
@@ -236,7 +246,7 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-        let data = yield executeThunk(this.client, WORLD, params);
+        let data = yield executeThunk(this.client, WORLD_WITH_AREA, params);
         if (data.rows) {
             let result = data.rows[0];
             if(data.rows.length > 0){
@@ -246,25 +256,11 @@ class CartoDBService {
                     result.area_ha = data.rows[0].area_ha;
                 }
             }
-            result.downloadUrls = this.getDownloadUrls(WORLD, params);
+            result.downloadUrls = this.getDownloadUrls(WORLD_WITH_AREA, params);
             return result;
         }
         return null;
     }
-
-    // * latest(limit=3) {
-    //     logger.debug('Obtaining latest with limit %s', limit);
-    //     let params = {
-    //         limit: limit
-    //     };
-    //     let data = yield executeThunk(this.client, LATEST, params);
-    //     logger.debug('data', data);
-    //     if (data.rows ) {
-    //         let result = data.rows;
-    //         return result;
-    //     }
-    //     return null;
-    // }
 
 }
 
