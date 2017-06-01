@@ -47,7 +47,7 @@ class FormaAlertsRouter {
         if (!useTable) {
             this.throw(404, 'Name not found');
         }
-        let data = yield CartoDBService.getUse(useTable, this.params.id, this.query.period);
+        let data = yield CartoDBService.getUse(this.params.name, useTable, this.params.id, this.query.period);
         this.body = FormaAlertsSerializer.serialize(data);
 
     }
@@ -111,11 +111,11 @@ class FormaAlertsRouter {
     }
 
 
-    static * latest() {
-        logger.info('Obtaining latest data');
-        let data = yield CartoDBService.latest(this.query.limit);
-        this.body = FormaAlertsSerializer.serializeLatest(data);
-    }
+    // static * latest() {
+    //     logger.info('Obtaining latest data');
+    //     let data = yield CartoDBService.latest(this.query.limit);
+    //     this.body = FormaAlertsSerializer.serializeLatest(data);
+    // }
 
 }
 
@@ -134,7 +134,7 @@ router.get('/use/:name/:id', isCached, FormaAlertsRouter.use);
 router.get('/wdpa/:id', isCached, FormaAlertsRouter.wdpa);
 router.get('/', isCached, FormaAlertsRouter.world);
 router.post('/', FormaAlertsRouter.worldWithGeojson);
-router.get('/latest', isCached, FormaAlertsRouter.latest);
+// router.get('/latest', isCached, FormaAlertsRouter.latest);
 
 
 module.exports = router;
