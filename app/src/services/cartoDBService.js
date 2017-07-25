@@ -125,8 +125,12 @@ class CartoDBService {
         }
     }
 
+    getURLForSubscrition(query) {
+        let queryFinal = query.replace('select COUNT(f.activity) AS value', 'SELECT f.*');
+        return queryFinal;
+    }
 
-    * getNational(iso, period = defaultDate()) {
+    * getNational(iso, forSubscription, period = defaultDate()) {
         logger.debug('Obtaining national of iso %s', iso);
         let periods = period.split(',');
         let params = {
@@ -134,9 +138,16 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
+        let query = ISO;
+        if (forSubscription) {
+            query = this.getURLForSubscrition(ISO);
+        }
         const geostore = yield GeostoreService.getGeostoreByIso(iso);
-        let data = yield executeThunk(this.client, ISO, params);
+        let data = yield executeThunk(this.client, query, params);
         if (geostore) {
+            if (forSubscription && data.rows) {
+                return data.rows;
+            }
             if (data.rows && data.rows.length > 0) {
                 let result = data.rows[0];
                 result.area_ha = geostore.areaHa;
@@ -144,14 +155,14 @@ class CartoDBService {
                 return result;
             } else {
                 return {
-                    area_ha: geostore.areaHa   
+                    area_ha: geostore.areaHa
                 };
             }
         }
         return null;
     }
 
-    * getSubnational(iso, id1, period = defaultDate()) {
+    * getSubnational(iso, id1, forSubscription, period = defaultDate()) {
         logger.debug('Obtaining subnational of iso %s and id1', iso, id1);
         let periods = period.split(',');
         let params = {
@@ -160,9 +171,16 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
+        let query = ID1;
+        if (forSubscription) {
+            query = this.getURLForSubscrition(ID1);
+        }
         let geostore = yield GeostoreService.getGeostoreByIsoAndId(iso, id1);
-        let data = yield executeThunk(this.client, ID1, params);
+        let data = yield executeThunk(this.client, query, params);
         if(geostore) {
+            if (forSubscription && data.rows) {
+                return data.rows;
+            }
             if (data.rows && data.rows.length > 0) {
                 let result = data.rows[0];
                 result.area_ha = geostore.areaHa;
@@ -177,7 +195,7 @@ class CartoDBService {
         return null;
     }
 
-    * getUse(useName, useTable, id, period = defaultDate()) {
+    * getUse(useName, useTable, id, forSubscription, period = defaultDate()) {
         logger.debug('Obtaining use with id %s', id);
         let periods = period.split(',');
         let params = {
@@ -186,9 +204,16 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
+        let query = USE;
+        if (forSubscription) {
+            query = this.getURLForSubscrition(USE);
+        }
         const geostore = yield GeostoreService.getGeostoreByUse(useName, id);
-        let data = yield executeThunk(this.client, USE, params);
+        let data = yield executeThunk(this.client, query, params);
         if (geostore) {
+            if (forSubscription && data.rows) {
+                return data.rows;
+            }
             if (data.rows && data.rows.length > 0) {
                 let result = data.rows[0];
                 result.area_ha = geostore.areaHa;
@@ -203,7 +228,7 @@ class CartoDBService {
         return null;
     }
 
-    * getWdpa(wdpaid, period = defaultDate()) {
+    * getWdpa(wdpaid, forSubscription, period = defaultDate()) {
         logger.debug('Obtaining wpda of id %s', wdpaid);
         let periods = period.split(',');
         let params = {
@@ -211,9 +236,16 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
+        let query = WDPA;
+        if (forSubscription) {
+            query = this.getURLForSubscrition(WDPA);
+        }
         const geostore = yield GeostoreService.getGeostoreByWdpa(wdpaid);
-        let data = yield executeThunk(this.client, WDPA, params);
+        let data = yield executeThunk(this.client, query, params);
         if (geostore) {
+            if (forSubscription && data.rows) {
+                return data.rows;
+            }
             if (data.rows && data.rows.length > 0) {
                 let result = data.rows[0];
                 result.area_ha = geostore.areaHa;
@@ -228,17 +260,17 @@ class CartoDBService {
         return null;
     }
 
-    * getWorld(hashGeoStore, period = defaultDate()) {
+    * getWorld(hashGeoStore, forSubscription, period = defaultDate()) {
         logger.debug('Obtaining world with hashGeoStore %s', hashGeoStore);
 
         const geostore = yield GeostoreService.getGeostoreByHash(hashGeoStore);
         if (geostore && geostore.geojson) {
-            return yield this.getWorldWithGeojson(geostore.geojson, period, geostore.areaHa);
+            return yield this.getWorldWithGeojson(geostore.geojson, forSubscription, period, geostore.areaHa);
         }
         throw new NotFound('Geostore not found');
     }
 
-    * getWorldWithGeojson(geojson, period = defaultDate(), areaHa=null) {
+    * getWorldWithGeojson(geojson, forSubscription, period = defaultDate(), areaHa=null) {
         logger.debug('Executing query in cartodb with geojson', geojson);
         let periods = period.split(',');
         let params = {
@@ -246,7 +278,14 @@ class CartoDBService {
             begin: periods[0],
             end: periods[1]
         };
-        let data = yield executeThunk(this.client, WORLD_WITH_AREA, params);
+        let query = WORLD_WITH_AREA;
+        if (forSubscription) {
+            query = this.getURLForSubscrition(WORLD_WITH_AREA);
+        }
+        let data = yield executeThunk(this.client, query, params);
+        if (forSubscription && data.rows) {
+            return data.rows;
+        }
         if (data.rows) {
             let result = data.rows[0];
             if(data.rows.length > 0){
