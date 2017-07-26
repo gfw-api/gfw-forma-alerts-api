@@ -14,14 +14,14 @@ var router = new Router({
 class FormaAlertsRouter {
     static * getNational() {
         logger.info('Obtaining national data');
-        let data = yield CartoDBService.getNational(this.params.iso, this.query.period);
+        let data = yield CartoDBService.getNational(this.params.iso, this.query.forSubscription, this.query.period);
 
         this.body = FormaAlertsSerializer.serialize(data);
     }
 
     static * getSubnational() {
         logger.info('Obtaining subnational data');
-        let data = yield CartoDBService.getSubnational(this.params.iso, this.params.id1, this.query.period);
+        let data = yield CartoDBService.getSubnational(this.params.iso, this.params.id1, this.query.forSubscription, this.query.period);
         this.body = FormaAlertsSerializer.serialize(data);
     }
 
@@ -47,14 +47,14 @@ class FormaAlertsRouter {
         if (!useTable) {
             this.throw(404, 'Name not found');
         }
-        let data = yield CartoDBService.getUse(this.params.name, useTable, this.params.id, this.query.period);
+        let data = yield CartoDBService.getUse(this.params.name, useTable, this.params.id, this.query.forSubscription, this.query.period);
         this.body = FormaAlertsSerializer.serialize(data);
 
     }
 
     static * wdpa() {
         logger.info('Obtaining wpda data with id %s', this.params.id);
-        let data = yield CartoDBService.getWdpa(this.params.id, this.query.period);
+        let data = yield CartoDBService.getWdpa(this.params.id, this.query.forSubscription, this.query.period);
         this.body = FormaAlertsSerializer.serialize(data);
     }
 
@@ -80,7 +80,7 @@ class FormaAlertsRouter {
         logger.info('Obtaining world data');
         this.assert(this.query.geostore, 400, 'GeoJSON param required');
         try {
-            let data = yield CartoDBService.getWorld(this.query.geostore, this.query.period);
+            let data = yield CartoDBService.getWorld(this.query.geostore, this.query.forSubscription, this.query.period);
 
             this.body = FormaAlertsSerializer.serialize(data);
         } catch (err) {
@@ -97,7 +97,7 @@ class FormaAlertsRouter {
         logger.info('Obtaining world data with geostore');
         this.assert(this.request.body.geojson, 400, 'GeoJSON param required');
         try{            
-            let data = yield CartoDBService.getWorldWithGeojson(FormaAlertsRouter.checkGeojson(this.request.body.geojson), this.query.period);
+            let data = yield CartoDBService.getWorldWithGeojson(FormaAlertsRouter.checkGeojson(this.request.body.geojson), this.query.forSubscription, this.query.period);
 
             this.body = FormaAlertsSerializer.serialize(data);
         } catch(err){
