@@ -1,10 +1,8 @@
-'use strict';
+const JSONAPISerializer = require('jsonapi-serializer').Serializer;
 
-var logger = require('logger');
-var JSONAPISerializer = require('jsonapi-serializer').Serializer;
-var formaAlertsSerializer = new JSONAPISerializer('forma-alerts', {
+const formaAlertsSerializer = new JSONAPISerializer('forma-alerts', {
     attributes: ['value', 'period', 'downloadUrls', 'area_ha', 'latitude', 'longitude', 'acq_date', 'acq_time'],
-    typeForAttribute: function(attribute, record) {
+    typeForAttribute(attribute) {
         return attribute;
     },
     downloadUrls: {
@@ -13,9 +11,9 @@ var formaAlertsSerializer = new JSONAPISerializer('forma-alerts', {
     keyForAttribute: 'camelCase'
 });
 
-var formaLatestSerializer = new JSONAPISerializer('imazon-latest', {
+const formaLatestSerializer = new JSONAPISerializer('imazon-latest', {
     attributes: ['date'],
-    typeForAttribute: function(attribute, record) {
+    typeForAttribute(attribute) {
         return attribute;
     }
 });
@@ -25,9 +23,11 @@ class FormaAlertsSerializer {
     static serialize(data) {
         return formaAlertsSerializer.serialize(data);
     }
+
     static serializeLatest(data) {
         return formaLatestSerializer.serialize(data);
     }
+
 }
 
 module.exports = FormaAlertsSerializer;

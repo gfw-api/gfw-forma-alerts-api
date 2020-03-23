@@ -1,11 +1,11 @@
 {
-    "logger": {
-        "name": "gfw-forma-alerts-api-STAGING",
-        "level": "debug",
-        "toFile": false,
-        "dirLogFile": null
-    },
-    "service": {
-        "port": null
-    }
+  "logger": {
+    "name": "gfw-forma-alerts-api-STAGING",
+    "level": "debug",
+    "toFile": false,
+    "dirLogFile": null
+  },
+  "service": {
+    "port": null
+  }
 }

@@ -1,8 +1,8 @@
 {
-    "logger": {
-        "name": "gfw-forma-alerts-api-TEST",
-        "level": "debug",
-        "toFile": false,
-        "dirLogFile": null
-    }
+  "logger": {
+    "name": "gfw-forma-alerts-api-TEST",
+    "level": "debug",
+    "toFile": false,
+    "dirLogFile": null
+  }
 }
