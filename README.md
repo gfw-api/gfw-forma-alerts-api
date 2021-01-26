@@ -1,6 +1,6 @@
 # GFW Forma Alerts API
 
-[![Build Status](https://travis-ci.org/gfw-api/gfw-forma-alerts-api.svg?branch=develop)](https://travis-ci.org/gfw-api/gfw-forma-alerts-api)
+[![Build Status](https://travis-ci.com/gfw-api/gfw-forma-alerts-api.svg?branch=dev)](https://travis-ci.com/gfw-api/gfw-forma-alerts-api)
 [![Test Coverage](https://api.codeclimate.com/v1/badges/38c6573628d854533ee9/test_coverage)](https://codeclimate.com/github/gfw-api/gfw-forma-alerts-api/test_coverage)
 
 This repository is the microservice that it implement the forma alerts funcionality and exposed the /forma-alerts endpoints in the api-gateway
