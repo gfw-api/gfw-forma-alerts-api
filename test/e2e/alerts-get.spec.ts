@@ -1,13 +1,13 @@
 /* eslint-disable max-len */
-const nock = require('nock');
-const chai = require('chai');
-const config = require('config');
-
-const { getTestServer } = require('./utils/test-server');
+import chai from 'chai';
+import nock from 'nock';
+import config from 'config';
+import { getTestAgent } from "./utils/test-server";
+import { mockValidateRequestWithApiKey } from "./utils/helpers";
 
 chai.should();
 
-const requester = getTestServer();
+let requester: ChaiHttp.Agent;
 
 describe('Get alerts tests', () => {
 
@@ -15,10 +15,14 @@ describe('Get alerts tests', () => {
         if (process.env.NODE_ENV !== 'test') {
             throw Error(`Running the test suite with NODE_ENV ${process.env.NODE_ENV} may result in permanent data loss. Please use NODE_ENV=test.`);
         }
+
+        requester = await getTestAgent();
     });
 
     it('Get all forma alerts with no GeoJSON argument should return a 400 error', async () => {
-        const response = await requester.get(`/api/v1/forma-alerts`);
+        mockValidateRequestWithApiKey({});
+        const response = await requester.get(`/api/v1/forma-alerts`)
+            .set('x-api-key', 'api-key-test');
 
         response.status.should.equal(400);
         response.body.should.have.property('errors').and.be.an('array');
@@ -27,13 +31,18 @@ describe('Get alerts tests', () => {
     });
 
     it('Get all forma alerts with required GeoJSON argument should return a 400 error', async () => {
+        mockValidateRequestWithApiKey({});
 
         const yesterday = new Date(Date.now() - (24 * 60 * 60 * 1000));
         const today = new Date();
         const yesterdayDateString = `${yesterday.getFullYear().toString()}-${(yesterday.getMonth() + 1).toString()}-${yesterday.getDate().toString()}`;
         const todayDateString = `${today.getFullYear().toString()}-${(today.getMonth() + 1).toString()}-${today.getDate().toString()}`;
 
-        nock(process.env.CT_URL)
+        nock(process.env.GATEWAY_URL, {
+            reqheaders: {
+                'x-api-key': 'api-key-test',
+            }
+        })
             .get('/v1/geostore/ddc18d3a0692eea844f687c6d0fd3002')
             .reply(200, {
                 data: {
@@ -96,11 +105,10 @@ describe('Get alerts tests', () => {
 
         nock(`https://${config.get('cartoDB.user')}.cartodb.com`)
             .get('/api/v2/sql')
-            .query(
-                {
-                    q: `\n         with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[97.8022402524948,3.54695899437202],[97.7098971605301,3.65959283509467],[97.7457857877016,3.69128687805699],[97.8363706916571,3.58327709749651],[97.8022402524948,3.54695899437202]]]}'), 4326), TRUE)/1000 as area_ha )\n        select area.area_ha, COUNT(f.activity) AS value\n        from area left join forma_activity f on\n        ST_INTERSECTS(\n                ST_SetSRID(ST_GeomFromGeoJSON('{"type":"Polygon","coordinates":[[[97.8022402524948,3.54695899437202],[97.7098971605301,3.65959283509467],[97.7457857877016,3.69128687805699],[97.8363706916571,3.58327709749651],[97.8022402524948,3.54695899437202]]]}'), 4326), f.the_geom)\n        and f.acq_date >= '${yesterdayDateString}'::date\n        AND f.acq_date <= '${todayDateString}'::date\n        group by area.area_ha`
-                }
-            )
+            .query({
+                "q": "\n         with area as (select ST_Area(ST_SetSRID(ST_GeomFromGeoJSON('{\"type\":\"Polygon\",\"coordinates\":[[[97.8022402524948,3.54695899437202],[97.7098971605301,3.65959283509467],[97.7457857877016,3.69128687805699],[97.8363706916571,3.58327709749651],[97.8022402524948,3.54695899437202]]]}'), 4326), TRUE)/1000 as area_ha )\n        select area.area_ha, COUNT(f.activity) AS value\n        from area left join forma_activity f on\n        ST_INTERSECTS(\n                ST_SetSRID(ST_GeomFromGeoJSON('{\"type\":\"Polygon\",\"coordinates\":[[[97.8022402524948,3.54695899437202],[97.7098971605301,3.65959283509467],[97.7457857877016,3.69128687805699],[97.8363706916571,3.58327709749651],[97.8022402524948,3.54695899437202]]]}'), 4326), f.the_geom)\n        and f.acq_date >= '2023-8-9'::date\n        AND f.acq_date <= '2023-8-10'::date\n        group by area.area_ha",
+                "format": "json"
+            })
             .reply(200, {
                 rows: [{ area_ha: 85659.8432471621, value: 0 }],
                 time: 0.004,
@@ -114,6 +122,7 @@ describe('Get alerts tests', () => {
 
         const response = await requester
             .get(`/api/v1/forma-alerts`)
+            .set('x-api-key', 'api-key-test')
             .query({
                 geostore: 'ddc18d3a0692eea844f687c6d0fd3002'
             });
@@ -122,7 +131,6 @@ describe('Get alerts tests', () => {
         response.body.should.have.property('data').and.be.an('object');
         response.body.data.should.deep.equal({
             type: 'forma-alerts',
-            id: 'undefined',
             attributes: {
                 value: 0,
                 downloadUrls: {
@@ -135,7 +143,8 @@ describe('Get alerts tests', () => {
                 areaHa: 8623.296121210287
             }
         });
-    });
+    })
+    ;
 
     afterEach(async () => {
         if (!nock.isDone()) {

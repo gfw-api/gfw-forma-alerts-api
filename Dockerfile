@@ -1,28 +1,26 @@
-FROM node:12-alpine
+FROM node:20.4-alpine3.18
 MAINTAINER info@vizzuality.com
 
 ENV NAME gfw-forma-alerts-api
 ENV USER microservice
 
-RUN apk update && apk upgrade && \
-    apk add --no-cache --update bash git openssh python
-
 RUN addgroup $USER && adduser -s /bin/bash -D -G $USER $USER
 
-RUN yarn global add grunt-cli bunyan
+RUN apk update && apk upgrade && \
+    apk add --no-cache --update bash git openssh python3 build-base
 
 RUN mkdir -p /opt/$NAME
-ADD package.json /opt/$NAME/package.json
+COPY package.json /opt/$NAME/package.json
 COPY yarn.lock /opt/$NAME/yarn.lock
-RUN cd /opt/$NAME && yarn
+COPY tsconfig.json /opt/$NAME/tsconfig.json
+RUN cd /opt/$NAME && yarn install
 
 COPY entrypoint.sh /opt/$NAME/entrypoint.sh
 COPY config /opt/$NAME/config
+COPY src /opt/$NAME/src
+COPY test /opt/$NAME/test
 
 WORKDIR /opt/$NAME
-
-COPY ./app /opt/$NAME/app
-RUN chown -R $USER:$USER /opt/$NAME
 
 # Tell Docker we are going to use this ports
 EXPOSE 3600
