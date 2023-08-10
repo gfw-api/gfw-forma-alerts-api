@@ -6,7 +6,7 @@
     "dirLogFile": null
   },
   "service": {
-    "id": "gfw-forma-alerts-api_1.0.0",
+    "id": "gfw-forma-alerts-api",
     "name": "GFW Forma Alerts API",
     "port": 3600
   },
